@@ -171,30 +171,6 @@ class Scheduler
     puts "✅ Added tweet to queue under '#{category}'"
   end
 
-  # TWEET NOW
-  def find_upcoming_by_id(id)
-    all = CSV.read(TWEET_COLLECTION_FILE, headers: true)
-    row = all.find { |r| r['id'] == id }
-    return nil unless row
-
-    { id: row['id'], category: row['category'], tweet: row['tweet'] }
-  end
-
-  def remove_from_tweet_collection(id)
-    all = CSV.read(TWEET_COLLECTION_FILE, headers: true)
-    updated = all.reject { |r| r['id'] == id }
-    CSV.open(TWEET_COLLECTION_FILE, 'w') do |csv|
-      csv << all.headers
-      updated.each { |r| csv << r }
-    end
-  end
-
-  def post_tweet_and_get_url(text)
-    tweet_obj = @client.post("tweets", { text: text }.to_json)
-    tweet_id = tweet_obj.dig("data", "id")
-    "https://x.com/#{ENV['X_USERNAME']}/status/#{tweet_id}"
-  end
-
   def format_tweet(text)
     # Add line break after the first sentence
     formatted = text.sub(/\. /, ".\n\n")

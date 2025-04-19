@@ -1,9 +1,9 @@
-name: TweetX | Deploy
-run-name: "Deploy - TweetX | ${{ github.head_ref || github.ref_name }}"
+name: Your Project Name
+run-name: Your Project Name Run
 
 on:
   schedule:
-    - cron: "0 * * * *"  # Runs every hour, at minute 0
+    - cron: "* * * * *"  # Runs every hour, at minute 0
   workflow_dispatch:      # Allows manual run from GitHub UI
 
 permissions:
@@ -20,16 +20,16 @@ jobs:
       - name: 🛠 Setup Ruby Version
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.2.2'
+          ruby-version: '3.2.2' # Specify the Ruby version you want to use
 
       - name: 🔄 Checkout/Create `Publish | TweetX` branch
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin publish-tweetx || echo "No remote publish-tweetx branch yet"
-          git checkout publish-tweetx 2>/dev/null || git checkout -b publish-tweetx
+          git fetch origin your-branch || echo "No remote your-branch branch yet"
+          git checkout your-branch 2>/dev/null || git checkout -b your-branch
 
-      - name: 🔄 Merge main | `publish-tweetx`
+      - name: 🔄 Merge main | `your-branch`
         run: |
           git fetch origin main
           git merge origin/main --allow-unrelated-histories --no-edit || echo "No new commits to merge"
@@ -49,20 +49,20 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tweets-queue
-          path: data/tweet_collection.csv
+          path: data/tweet_collection.csv # This is the CSV file that contains the tweets to be posted
 
       - name: 📦 Upload Tweet Published CSV
         uses: actions/upload-artifact@v4
         with:
           name: tweets-published
-          path: data/tweet_published.csv
+          path: data/tweet_published.csv # This is the CSV file that contains the tweets that have been posted
 
       - name: 📝 Commit updated Tweet Published List
         run: |
           git add data/tweet_published.csv
           if ! git diff --cached --quiet; then
             git commit -m "🤖 chore: Updated published tweets list [skip ci]"
-            git push origin publish-tweetx
+            git push origin your-branch
           else
             echo "🟡 No tweet posted — nothing to commit"
           fi
