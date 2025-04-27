@@ -5,6 +5,8 @@ _— Your Developer-First Tweet Automation Toolkit_
 
 > ✅ Schedule, post, manage, and automate tweets — all with a clean Ruby-powered CLI and UI.
 
+
+
 ## 💡 What is TweetX?
 
 TweetX is a simple, open-source tool that lets you:
