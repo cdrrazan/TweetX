@@ -1,19 +1,23 @@
 # frozen_string_literal: true
 
-# Gemfile
+##
+# Gemfile for TweetX - A Developer-First Tweet Automation Toolkit.
+# Manages Ruby dependencies for the TweetX application.
+#
+
 source 'https://rubygems.org'
 
 ruby '3.2.2'
 
-# CLI
+# CLI framework for command-line interface
 gem 'thor'
 
-# Credentials & API
+# Environment variables and API credentials
 gem 'dotenv'
 gem 'x' # Official Twitter/X API gem
 
-# Misc
-gem 'csv'
-gem 'debug'
-gem 'time'
-gem 'tzinfo'
+# Standard library extensions and utilities
+gem 'csv'    # CSV file handling
+gem 'debug'  # Debugging support
+gem 'time'   # Time utilities
+gem 'tzinfo' # Timezone information
