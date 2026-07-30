@@ -1,41 +1,74 @@
+# TweetX scheduled publishing — template.
+#
+# This file is inert; GitHub only reads workflows ending in .yml. To use it:
+#
+#   1. cp deploy.yml.sample deploy.yml
+#   2. Replace OWNER/REPO with your repository, and `your-branch` with the
+#      branch you want published history committed to.
+#   3. Add repository secrets (Settings → Secrets and variables → Actions):
+#        X_API_KEY, X_API_KEY_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET
+#   4. Commit deploy.yml to your default branch. Scheduled workflows only
+#      trigger from the default branch, so it will not fire from a feature
+#      branch.
+#
+# Once live this posts a real tweet on every run and commits the updated
+# data/tweet_published.csv to the publish branch.
+#
+# Note: `bin/tweetx tweet` does not delete the posted row from
+# data/tweet_collection.csv — deduplication is by matching tweet text against
+# tweet_published.csv, so the queue file only grows.
+
 name: Your Project Name
 run-name: Your Project Name Run
 
 on:
   schedule:
-    - cron: "* * * * *"  # Runs every hour, at minute 0
+    - cron: "0 * * * *"  # Every hour, at minute 0 (UTC)
   workflow_dispatch:      # Allows manual run from GitHub UI
 
 permissions:
   contents: write  # Allows push access to the repo
 
+# Only one publish run at a time. Two concurrent runs would race on the push,
+# and cancelling a run mid-post could tweet without recording it.
+concurrency:
+  group: tweetx-publish
+  cancel-in-progress: false
+
 jobs:
   tweetx:
     runs-on: ubuntu-latest
+    # Never post from a fork — it would run against the fork's secrets, or
+    # against none at all. Replace with your own owner/repo.
+    if: github.repository == 'OWNER/REPO'
 
     steps:
       - name: 📥 Checkout GH repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          # Full history: the merge below and the push to the publish branch
+          # both break on the default shallow clone.
+          fetch-depth: 0
 
       - name: 🛠 Setup Ruby Version
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2.2' # Specify the Ruby version you want to use
+          bundler-cache: true   # bundle install + dependency caching
 
-      - name: 🔄 Checkout/Create `Publish | TweetX` branch
+      - name: 🔄 Checkout/Create publish branch
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin your-branch || echo "No remote your-branch branch yet"
-          git checkout your-branch 2>/dev/null || git checkout -b your-branch
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin your-branch; then
+            git checkout -B your-branch origin/your-branch
+          else
+            echo "No remote your-branch yet — creating it"
+            git checkout -B your-branch
+          fi
 
       - name: 🔄 Merge main | `your-branch`
-        run: |
-          git fetch origin main
-          git merge origin/main --allow-unrelated-histories --no-edit || echo "No new commits to merge"
-
-      - name: 🧰 Install dependencies | TweetX
-        run: bundle install
+        run: git merge origin/main --allow-unrelated-histories --no-edit
 
       - name: 🐦 Run TweetX
         run: bundle exec ruby bin/tweetx tweet
@@ -49,20 +82,22 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tweets-queue
-          path: data/tweet_collection.csv # This is the CSV file that contains the tweets to be posted
+          path: data/tweet_collection.csv # The CSV containing tweets to be posted
+          retention-days: 7
 
       - name: 📦 Upload Tweet Published CSV
         uses: actions/upload-artifact@v4
         with:
           name: tweets-published
-          path: data/tweet_published.csv # This is the CSV file that contains the tweets that have been posted
+          path: data/tweet_published.csv # The CSV containing tweets already posted
+          retention-days: 7
 
       - name: 📝 Commit updated Tweet Published List
         run: |
           git add data/tweet_published.csv
-          if ! git diff --cached --quiet; then
+          if git diff --cached --quiet; then
+            echo "🟡 No tweet posted — nothing to commit"
+          else
             git commit -m "🤖 chore: Updated published tweets list [skip ci]"
             git push origin your-branch
-          else
-            echo "🟡 No tweet posted — nothing to commit"
           fi
