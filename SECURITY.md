@@ -11,7 +11,7 @@ Please do **not** open a public issue for a security problem.
 
 Report it privately through
 [GitHub Security Advisories](https://github.com/cdrrazan/TweetX/security/advisories/new),
-or by email to **cdrrazan@gmail.com**.
+or by email to **irajanbhattarai@gmail.com**.
 
 Please include what you can: what the issue is, how to reproduce it, and what an
 attacker could achieve. You will get an acknowledgement within a few days. This
