@@ -1,0 +1,37 @@
+plugins:
+  - rubocop-rspec
+
+AllCops:
+  TargetRubyVersion: 3.2
+  NewCops: enable
+  Exclude:
+    - 'vendor/**/*'
+    - 'data/**/*'
+
+Metrics/BlockLength:
+  Exclude:
+    - 'spec/**/*'
+
+Metrics/MethodLength:
+  Max: 30
+
+Metrics/AbcSize:
+  Max: 30
+
+Metrics/CyclomaticComplexity:
+  Max: 10
+
+Metrics/PerceivedComplexity:
+  Max: 10
+
+Layout/LineLength:
+  Max: 140
+
+# Scheduler is documented with RDoc-style ## blocks, which this cop does not
+# recognise as a class-level comment.
+Style/Documentation:
+  Enabled: false
+
+# The CLI talks to people through stdout; puts is the interface, not a leftover.
+Style/StderrPuts:
+  Enabled: false

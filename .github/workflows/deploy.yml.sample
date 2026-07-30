@@ -55,6 +55,9 @@ jobs:
         with:
           ruby-version: '3.2.2' # Specify the Ruby version you want to use
           bundler-cache: true   # bundle install + dependency caching
+        env:
+          # This job only runs bin/tweetx, so skip RSpec and RuboCop.
+          BUNDLE_WITHOUT: development:test
 
       - name: 🔄 Checkout/Create publish branch
         run: |
