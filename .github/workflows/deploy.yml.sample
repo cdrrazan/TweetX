@@ -50,15 +50,10 @@ jobs:
           # both break on the default shallow clone.
           fetch-depth: 0
 
-      - name: 🛠 Setup Ruby Version
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.2.2' # Specify the Ruby version you want to use
-          bundler-cache: true   # bundle install + dependency caching
-        env:
-          # This job only runs bin/tweetx, so skip RSpec and RuboCop.
-          BUNDLE_WITHOUT: development:test
-
+      # Switch branches BEFORE installing gems. ruby/setup-ruby writes `path`
+      # and `deployment` into .bundle/config, and git refuses to switch branches
+      # over a modified file. Installing after the merge also means the gems
+      # match the Gemfile.lock actually being run.
       - name: 🔄 Checkout/Create publish branch
         run: |
           git config user.name "github-actions[bot]"
@@ -72,6 +67,17 @@ jobs:
 
       - name: 🔄 Merge main | `your-branch`
         run: git merge origin/main --allow-unrelated-histories --no-edit
+
+      - name: 🛠 Setup Ruby Version
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2.2' # Specify the Ruby version you want to use
+          bundler-cache: true   # bundle install + dependency caching
+        env:
+          # This job only runs bin/tweetx, so skip RSpec and RuboCop. Keep
+          # .bundle/config out of git for this to work — a committed
+          # BUNDLE_WITHOUT takes precedence over the environment.
+          BUNDLE_WITHOUT: development:test
 
       - name: 🐦 Run TweetX
         run: bundle exec ruby bin/tweetx tweet

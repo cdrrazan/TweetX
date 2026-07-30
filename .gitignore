@@ -5,5 +5,11 @@
 .env
 .byebug_history
 
+# Bundler writes .bundle/config itself — ruby/setup-ruby sets `path` and
+# `deployment` there on every CI run. Tracking it made the working tree dirty
+# mid-job and let a committed BUNDLE_WITHOUT override the one CI passes in.
+.bundle/
+vendor/bundle/
+
 # Misc
 .DS_Store
