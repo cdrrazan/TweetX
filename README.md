@@ -1,108 +1,138 @@
-# 🐦 TweetX 
+# 🐦 TweetX
+
 _— Your Developer-First Tweet Automation Toolkit_
 
-**TweetX** is a lightweight, developer-friendly tweet scheduler and dashboard designed for coders, writers, and creators who want to stay consistent without the hassle.
+**TweetX** is a lightweight tweet scheduler for coders, writers, and creators who want to stay consistent without the hassle. Write your tweets once, sort them into categories, and let a cron job post one every hour.
 
-> ✅ Schedule, post, manage, and automate tweets — all with a clean Ruby-powered CLI and UI.
+> ✅ A clean Ruby CLI, a CSV file, and a GitHub Action. That's the whole system.
 
+This repo is the **CLI**. The web dashboard lives in [TweetX-web](https://github.com/cdrrazan/TweetX-web) — see [Two repos, one tool](#-two-repos-one-tool) below.
 
+## 💡 What it does
 
-## 💡 What is TweetX?
+- ✍️ Keep a queue of tweets, tagged by category
+- 🕒 Post one per hour, picked from the category that matches the current time slot
+- 💾 Store everything in CSV — no database, no ORM, no migrations
+- 🌍 Schedule in your own timezone (Asia/Kathmandu by default)
+- 🐙 Run it from GitHub Actions and commit the published history back
 
-TweetX is a simple, open-source tool that lets you:
+It's a tweet CMS and bot for devs. Build once, automate forever.
 
-- ✍️ Write tweets by category
-- 📋 View and manage them from a beautiful dashboard
-- 🐙 Auto-post using GitHub Actions
-- 💾 Store everything in CSV (no DB needed!)
-- 🌍 Respect your timezone (Kathmandu 🇳🇵 or any)
-- 🔄 Commit back to GitHub on tweet publication
-
-It's like a tweet CMS + bot for devs. Build once. Automate forever.
-
-
-## ✨ Product Highlights
-
-- 🧠 Smart tweet selector (by category and time slot)
-- 🌐 Local dashboard (built with Sinatra + Bootstrap)
-- 📊 Dashboard filters: category, ID, text
-- 🔐 Login-protected UI with copy-to-clipboard + preview
-- 📆 Timezone-aware publishing (Kathmandu Time support)
-- 🔁 GitHub Actions for automation (publish-tweetx branch)
-- ✅ Auto commit + push updated tweet history
-
-
-
-## 🖥 UI & CLI Preview
+## 🚀 Getting started
 
 ```bash
-# Post one tweet manually
-$ bundle exec ruby bin/tweetx tweet
+git clone https://github.com/cdrrazan/TweetX.git
+cd TweetX
+bundle install            # Ruby 3.2.2, pinned in the Gemfile
 
-# Preview which tweet will be posted
-$ bundle exec ruby bin/tweetx preview
-
-# Run Sinatra dashboard locally
-$ ruby app.rb
+cp .env.sample .env       # then add your X API credentials
 ```
 
+You need four OAuth 1.0a values from the [X developer portal](https://developer.x.com/):
 
+```
+X_API_KEY=
+X_API_KEY_SECRET=
+X_ACCESS_TOKEN=
+X_ACCESS_TOKEN_SECRET=
+```
 
-## 📦 Built With
+`.env` is gitignored. The other variables in `.env.sample` are documented there — most belong to TweetX-web, and a few are kept for reference but unused.
 
-- **Ruby 3.x**
-- **Sinatra** (dashboard UI)
-- **CSV** for persistence
-- **tzinfo** for timezone support
-- **Bootstrap 5** for styling
-- **GitHub Actions** for CI/CD tweet posting
+## 🖥 Commands
 
+```bash
+bundle exec ruby bin/tweetx preview            # what the next run would post — no API call
+bundle exec ruby bin/tweetx tweet              # pick and post one tweet for the current slot
+bundle exec ruby bin/tweetx list               # unpublished tweets
+bundle exec ruby bin/tweetx archive            # published tweets
+bundle exec ruby bin/tweetx add "text" Devtip  # queue a new tweet
+```
 
+Start with `preview`. It runs the whole selection path and prints exactly what `tweet` would send, without touching the API.
 
-## 📂 Folder Structure
+## 🧪 Tests and linting
+
+```bash
+bundle exec rspec       # 72 examples
+bundle exec rubocop     # -a to autocorrect
+```
+
+Both are clean on `main`. The suite never touches the network — the X client is stubbed globally, so no test can post a tweet even with real credentials in your environment.
+
+## 🕒 How scheduling works
+
+The hour, in your configured timezone, decides the category:
+
+| Hours | Category |
+|---|---|
+| 05–08 | Motivation |
+| 09–12 | Devtip |
+| 13–16 | Branding |
+| 17–20 | Builtwith |
+| 21–23 | Ebook |
+| 00–04 | nothing posts overnight |
+
+A random unpublished tweet from the matching category is chosen. Anything empty or over 280 characters is skipped.
+
+Two things worth knowing:
+
+- **Category names are matched exactly.** These strings are compared with `==` against `data/categories.txt`. A casing slip makes a whole time slot post nothing, silently.
+- **Posting does not remove the tweet from the queue.** Deduplication works by matching tweet text against `data/tweet_published.csv`, so `tweet_collection.csv` only grows. This is deliberate.
+
+## 📂 Layout
 
 ```
 TweetX/
-├── app.rb              # Sinatra app
-├── bin/tweetx          # CLI interface
-├── lib/                # Tweet scheduler logic
-├── views/              # UI templates
-├── data/               # Tweets and categories CSV
-└── .github/workflows/  # Tweet scheduler via Actions
+├── bin/tweetx                        # executable
+├── lib/tweetx/cli.rb                 # Thor commands — one-line delegations
+├── lib/tweetx/scheduler.rb           # selection, formatting, CSV IO, the X client
+├── data/tweet_collection.csv         # the queue        (id, category, tweet)
+├── data/tweet_published.csv          # the archive      (+ timestamp)
+├── data/categories.txt               # category list
+├── spec/                             # RSpec suite
+└── .github/workflows/deploy.yml.sample
 ```
 
+## 🐙 Automating it
 
+`.github/workflows/deploy.yml.sample` is a ready-to-use hourly workflow. It is **inert** — GitHub only reads `.yml` files — so rename it to activate, and read the header comment first. In short:
 
-## 🚀 Who Is It For?
+1. Rename to `.github/workflows/deploy.yml`
+2. Add your four `X_*` values as repository secrets
+3. Replace `OWNER/REPO` in the `if:` guard, which is what stops forks from posting on your behalf
 
-- 🧑‍💻 Developers building in public
-- 🐦 Creators growing on Twitter/X
-- ✨ Indie hackers promoting their product
-- 🧰 Teams with structured tweet workflows
+It runs at `0 * * * *` UTC, posts one tweet, and commits the updated archive to a long-lived `publish-tweetx` branch. Note that scheduled workflows only fire from the default branch.
 
-If you’re tired of broken schedulers or overpriced SaaS tools, TweetX gives you full control.
+## 🧩 Two repos, one tool
 
+| Repo | What it is |
+|---|---|
+| **TweetX** (here) | the CLI and the scheduler |
+| [TweetX-web](https://github.com/cdrrazan/TweetX-web) | the Sinatra dashboard for browsing and editing the queue |
 
+They share `lib/tweetx/` and `data/` **by copy, not by dependency** — no gem, no submodule. A fix to shared code needs applying in both. This repo also deliberately omits the web-only scheduler methods that TweetX-web carries.
 
-## 📘 Coming Soon
+## 📦 Built with
 
-- 🔗 Thread support
-- 📈 Tweet analytics
-- ✨ AI tweet generator
-- 🧑‍🤝‍🧑 Multi-user roles
+Ruby 3.2 · [Thor](https://github.com/rails/thor) · [x](https://github.com/sferik/x-ruby) · TZInfo · CSV · RSpec · RuboCop
 
+## 🙌 Contributing
 
+Pull requests welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first — it lists the handful of things in this codebase that break silently rather than loudly. Everyone participating is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+Found a security issue? Please don't open an issue — see [SECURITY.md](SECURITY.md).
+
+## 📘 Ideas for later
+
+Thread support · tweet analytics · AI-assisted drafting · multi-account
 
 ## 👨‍💻 Created by
 
-[Rajan Bhattarai](https://github.com/cdrrazan) — a Ruby developer, product hacker, and open-source enthusiast.
-
-
+[Rajan Bhattarai](https://github.com/cdrrazan) — Ruby developer, product hacker, open-source enthusiast.
 
 ## 📜 License
 
-MIT — free for personal and commercial use.
+[MIT](LICENSE) — free for personal and commercial use.
 
-
-
-> ⭐ Star the project if it helps you! Pull requests welcome!
+> ⭐ Star the project if it helps you.
