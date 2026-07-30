@@ -18,9 +18,22 @@ bundle exec ruby bin/tweetx preview  # show what `tweet` would post, no API call
 bundle exec ruby bin/tweetx list     # unpublished tweets
 bundle exec ruby bin/tweetx archive  # published tweets
 bundle exec ruby bin/tweetx add "text" Category
+
+bundle exec rspec                    # 72 examples
+bundle exec rspec spec/tweetx/scheduler_spec.rb:42  # one file, or one example by line
+bundle exec rubocop                  # clean; -a autocorrects
 ```
 
-No tests and no linter. Verification is manual — `preview` and `Scheduler#run(dry_run: true)` exercise selection and formatting without hitting the X API.
+Both `rspec` and `rubocop` are clean on `main`. Keep them that way.
+
+### Testing notes
+
+Two invariants the suite depends on:
+
+- **`spec/spec_helper.rb` assigns placeholder X credentials before any app file loads.** `dotenv` does not override variables that are already set, so this is what stops a real `.env` from reaching the suite. `X::Client.new` is also stubbed globally, so no spec can post a tweet.
+- **`CsvFixtures#point_scheduler_at_fixtures` redirects `Scheduler`'s file constants at a temp dir.** Those paths are absolute, derived from `ROOT_DIR`, so a spec that skips it rewrites the real queue in `data/`.
+
+`preview` and `Scheduler#run(dry_run: true)` still exercise selection and formatting without an API call, which is useful against real data.
 
 ## Architecture
 
