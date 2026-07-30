@@ -40,13 +40,14 @@ class Scheduler
   # @return [void]
   #
   def run(dry_run: false)
-    if select_tweet.nil?
+    selected = select_tweet
+
+    if selected.nil?
       puts '🚫 No text available to tweet.'
       return
     end
 
-    category = select_tweet[0]
-    tweet = select_tweet[1]
+    category, tweet = selected
 
     formatted_tweet = format_tweet(tweet)
     unless valid_tweet?(formatted_tweet)
