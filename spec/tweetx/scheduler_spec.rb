@@ -19,6 +19,14 @@ RSpec.describe Scheduler do
     allow(scheduler).to receive(:my_timezone).and_return(Time.new(2026, 7, 30, hour, 0, 0))
   end
 
+  # select_tweet prints a status line as a side effect. This swallows that so
+  # the suite's own output stays readable, and returns what the method returned.
+  def select_tweet_quietly
+    result = nil
+    capture_stdout { result = scheduler.select_tweet }
+    result
+  end
+
   describe '#category_for_current_hour' do
     {
       5 => 'Motivation', 8 => 'Motivation',
@@ -82,9 +90,7 @@ RSpec.describe Scheduler do
     it 'returns a category and body from the current slot' do
       write_collection([['1', 'Devtip', 'Use bundle exec']])
 
-      capture_stdout { @selected = scheduler.select_tweet }
-
-      expect(@selected).to eq(['Devtip', 'Use bundle exec'])
+      expect(select_tweet_quietly).to eq(['Devtip', 'Use bundle exec'])
     end
 
     it 'reads the body from the tweet column' do
@@ -92,35 +98,27 @@ RSpec.describe Scheduler do
       # and silently broke dedup and both list commands.
       write_collection([['1', 'Devtip', 'Body text']])
 
-      capture_stdout { @selected = scheduler.select_tweet }
-
-      expect(@selected.last).to eq('Body text')
+      expect(select_tweet_quietly.last).to eq('Body text')
     end
 
     it 'ignores tweets from other categories' do
       write_collection([['1', 'Ebook', 'Wrong slot']])
 
-      capture_stdout { @selected = scheduler.select_tweet }
-
-      expect(@selected).to be_nil
+      expect(select_tweet_quietly).to be_nil
     end
 
     it 'ignores tweets whose text already appears in the archive' do
       write_collection([['1', 'Devtip', 'Already posted']])
       write_published([['99', 'Devtip', 'Already posted', '2026-07-30T00:00:00Z']])
 
-      capture_stdout { @selected = scheduler.select_tweet }
-
-      expect(@selected).to be_nil
+      expect(select_tweet_quietly).to be_nil
     end
 
     it 'returns nil outside posting hours' do
       at_hour(3)
       write_collection([%w[1 Devtip Anything]])
 
-      capture_stdout { @selected = scheduler.select_tweet }
-
-      expect(@selected).to be_nil
+      expect(select_tweet_quietly).to be_nil
     end
 
     it 'returns nil when the queue file is missing' do

@@ -25,10 +25,10 @@ class Scheduler
   #
   def initialize
     @client = X::Client.new(
-      api_key: ENV['X_API_KEY'],
-      api_key_secret: ENV['X_API_KEY_SECRET'],
-      access_token: ENV['X_ACCESS_TOKEN'],
-      access_token_secret: ENV['X_ACCESS_TOKEN_SECRET']
+      api_key: ENV.fetch('X_API_KEY', nil),
+      api_key_secret: ENV.fetch('X_API_KEY_SECRET', nil),
+      access_token: ENV.fetch('X_ACCESS_TOKEN', nil),
+      access_token_secret: ENV.fetch('X_ACCESS_TOKEN_SECRET', nil)
     )
   end
 
@@ -134,7 +134,10 @@ class Scheduler
   #
   def send_to_published(id, category, text)
     CSV.open(TWEET_PUBLISHED_FILE, 'a+') do |csv|
-      csv << %w[id category tweet timestamp] if csv.count.zero?
+      # `csv` is a CSV handle opened for append, not an Array. RuboCop suggests
+      # none?, but counting the rows already in the file is what decides whether
+      # a header is still needed, so the intent is clearer spelled out.
+      csv << %w[id category tweet timestamp] if csv.count.zero? # rubocop:disable Style/CollectionQuerying
       timestamp = Time.now.utc.iso8601
 
       csv << [id, category, text, timestamp]
@@ -151,7 +154,7 @@ class Scheduler
     tweet_info = select_tweet
 
     if tweet_info.nil?
-      puts "🚫 No tweet available to preview."
+      puts '🚫 No tweet available to preview.'
     else
       puts "🔍 Previewing tweet for category: #{tweet_info[0]}"
       puts '-' * 60
@@ -225,7 +228,9 @@ class Scheduler
   #
   def add_tweet(text, category)
     CSV.open(TWEET_COLLECTION_FILE, 'a+') do |csv|
-      csv << %w[id category tweet] if csv.count.zero?
+      # See the note in send_to_published: `csv` is an append handle, and the
+      # row count is what decides whether a header still has to be written.
+      csv << %w[id category tweet] if csv.count.zero? # rubocop:disable Style/CollectionQuerying
       id = SecureRandom.uuid
       csv << [id, category, text]
     end
@@ -240,8 +245,8 @@ class Scheduler
   # @return [String] The formatted tweet text
   #
   def format_tweet(text)
-    formatted = text.sub(/\. /, ".\n\n")
-    formatted.sub(/(#[\w]+)/, "\n\n\\1")
+    formatted = text.sub('. ', ".\n\n")
+    formatted.sub(/(#\w+)/, "\n\n\\1")
   end
 
   ##

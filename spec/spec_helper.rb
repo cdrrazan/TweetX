@@ -13,7 +13,7 @@ require 'csv'
 require 'fileutils'
 require 'tmpdir'
 
-Dir[File.expand_path('support/**/*.rb', __dir__)].sort.each { |file| require file }
+Dir[File.expand_path('support/**/*.rb', __dir__)].each { |file| require file }
 
 RSpec.configure do |config|
   config.expect_with :rspec do |expectations|
