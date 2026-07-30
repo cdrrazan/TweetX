@@ -27,6 +27,13 @@ RSpec.describe Scheduler do
     result
   end
 
+  # Same idea for run, whose return value is what the CLI exits on.
+  def run_quietly(**options)
+    result = nil
+    capture_stdout { result = scheduler.run(**options) }
+    result
+  end
+
   describe '#category_for_current_hour' do
     {
       5 => 'Motivation', 8 => 'Motivation',
@@ -230,6 +237,54 @@ RSpec.describe Scheduler do
 
       expect(capture_stdout { scheduler.run }).to include('Failed to tweet', 'rate limited')
     end
+
+    describe 'the return value, which the CLI turns into an exit status' do
+      it 'is true when the tweet was posted' do
+        expect(run_quietly).to be(true)
+      end
+
+      it 'is false when the API rejects the post' do
+        fake_client.raise_on_post = 'rate limited'
+
+        expect(run_quietly).to be(false)
+      end
+
+      it 'is true when there is simply nothing to post' do
+        # Every night between 00:00 and 05:00. Not a failure — the scheduled
+        # job must not go red for it.
+        write_collection([])
+
+        expect(run_quietly).to be(true)
+      end
+
+      it 'is true on a dry run' do
+        expect(run_quietly(dry_run: true)).to be(true)
+      end
+
+      it 'is true when the tweet is skipped as invalid' do
+        write_collection([['1', 'Devtip', 'x' * 300]])
+
+        expect(run_quietly).to be(true)
+      end
+    end
+
+    context 'when the API answers 2xx but returns no tweet id' do
+      before { fake_client.next_response = { 'data' => {} } }
+
+      it 'does not claim success' do
+        expect(capture_stdout { scheduler.run }).to include('returned no tweet id')
+      end
+
+      it 'does not archive the tweet' do
+        capture_stdout { scheduler.run }
+
+        expect(read_rows(published_path)).to be_empty
+      end
+
+      it 'reports failure to the caller' do
+        expect(run_quietly).to be(false)
+      end
+    end
   end
 
   describe '#send_to_published' do
@@ -363,6 +418,55 @@ RSpec.describe Scheduler do
   # carries — find_upcoming_by_id, remove_from_tweet_collection and
   # post_tweet_and_get_id_url. There is no CLI caller for them, so there is
   # nothing here to cover.
+
+  describe 'missing credentials' do
+    # X answers a request signed with blank credentials exactly as it answers
+    # one signed with revoked credentials: 401 "Unauthorized". These examples
+    # exist so the two are distinguishable from the output alone.
+    before do
+      at_hour(10)
+      write_collection([['1', 'Devtip', 'Ship it']])
+      stub_const('Scheduler::REQUIRED_CREDENTIALS', %w[X_API_KEY X_ACCESS_TOKEN])
+      allow(ENV).to receive(:fetch).and_call_original
+      allow(ENV).to receive(:fetch).with('X_ACCESS_TOKEN', nil).and_return('')
+    end
+
+    it 'names the credential that is missing' do
+      expect(capture_stdout { scheduler.run }).to include('X_ACCESS_TOKEN')
+    end
+
+    it 'does not name a credential that is present' do
+      expect(capture_stdout { scheduler.run }).not_to include('X_API_KEY,')
+    end
+
+    it 'says where the value should come from' do
+      expect(capture_stdout { scheduler.run }).to include('repository secrets')
+    end
+
+    it 'never calls the API' do
+      capture_stdout { scheduler.run }
+
+      expect(fake_client.posts).to be_empty
+    end
+
+    it 'reports failure so the job goes red' do
+      expect(run_quietly).to be(false)
+    end
+  end
+
+  describe '#credential_hint' do
+    it 'explains a 401 as a credential problem' do
+      expect(scheduler.credential_hint(401)).to include('rejected the credentials')
+    end
+
+    it 'explains a 403 as a permissions problem' do
+      expect(scheduler.credential_hint(403)).to include('Read and Write')
+    end
+
+    it 'says nothing for unrelated statuses' do
+      expect(scheduler.credential_hint(500)).to eq('')
+    end
+  end
 
   describe '#format_tweet' do
     it 'breaks the paragraph after the first sentence' do

@@ -33,18 +33,33 @@ class Scheduler
   end
 
   ##
+  # The four OAuth 1.0a values without which no post can succeed.
+  #
+  REQUIRED_CREDENTIALS = %w[
+    X_API_KEY
+    X_API_KEY_SECRET
+    X_ACCESS_TOKEN
+    X_ACCESS_TOKEN_SECRET
+  ].freeze
+
+  ##
   # Main runner method that posts a tweet.
   # Selects an appropriate tweet based on current time and posts it to X/Twitter.
   #
+  # The return value is what the CLI turns into an exit status, so it
+  # distinguishes "nothing to do" from "tried and failed". Having nothing to
+  # post is normal — it happens every night between 00:00 and 05:00 — and must
+  # not fail a scheduled job. A rejected API call must.
+  #
   # @param dry_run [Boolean] If true, only previews the tweet without posting
-  # @return [void]
+  # @return [Boolean] false only if posting was attempted and failed
   #
   def run(dry_run: false)
     selected = select_tweet
 
     if selected.nil?
       puts '🚫 No text available to tweet.'
-      return
+      return true
     end
 
     category, tweet = selected
@@ -52,26 +67,91 @@ class Scheduler
     formatted_tweet = format_tweet(tweet)
     unless valid_tweet?(formatted_tweet)
       puts "⚠️ Skipping invalid tweet (empty or >280 characters): #{formatted_tweet.inspect}"
-      return
+      return true
     end
 
     if dry_run
       puts "🤖 [DRY RUN] Would tweet:\n#{formatted_tweet}"
-      return
+      return true
     end
 
-    begin
-      response = @client.post('tweets', { text: formatted_tweet }.to_json)
+    post_tweet(formatted_tweet, category, tweet)
+  end
 
-      if response.dig(:data, :id) || response.dig('data', 'id')
-        obj_id = response.dig(:data, :id) || response.dig('data', 'id')
-        puts "✅ Tweeted: #{tweet}"
-        send_to_published(obj_id, category, tweet)
-      else
-        puts "❌ Failed to tweet: #{response.status} - #{response.body}"
-      end
-    rescue StandardError => e
-      puts "❌ Failed to tweet: #{e.message}"
+  ##
+  # Posts to X and records the result.
+  #
+  # @param formatted_tweet [String] The text actually sent
+  # @param category [String] Category of the selected tweet
+  # @param tweet [String] The raw body, as stored in the CSV
+  # @return [Boolean] True if the API accepted the tweet
+  #
+  def post_tweet(formatted_tweet, category, tweet)
+    # Check before calling out, because X answers a request signed with empty
+    # credentials and one signed with rejected credentials identically: 401
+    # "Unauthorized". Without this you cannot tell a credential that never
+    # arrived from a token that has been revoked.
+    missing = missing_credentials
+    unless missing.empty?
+      puts "❌ Not posting: no value for #{missing.join(', ')}."
+      puts '   In GitHub Actions these come from repository secrets; locally from .env.'
+      return false
+    end
+
+    response = @client.post('tweets', { text: formatted_tweet }.to_json)
+    obj_id = response.dig(:data, :id) || response.dig('data', 'id')
+
+    unless obj_id
+      # A 2xx with no id should not be possible, but silently treating it as
+      # success would drop the tweet without recording it.
+      puts '❌ Failed to tweet: the API accepted the request but returned no tweet id.'
+      puts "   Response: #{response.inspect}"
+      return false
+    end
+
+    puts "✅ Tweeted: #{tweet}"
+    send_to_published(obj_id, category, tweet)
+    true
+  rescue X::HTTPError => e
+    puts "❌ Failed to tweet: HTTP #{e.code} — #{e.message}"
+    puts "   Response body: #{e.response.body}" if e.response.respond_to?(:body)
+    puts credential_hint(e.code)
+    false
+  rescue StandardError => e
+    puts "❌ Failed to tweet: #{e.class} — #{e.message}"
+    false
+  end
+
+  ##
+  # @return [Array<String>] Names of credentials that are unset or blank
+  #
+  def missing_credentials
+    REQUIRED_CREDENTIALS.select { |name| ENV.fetch(name, nil).to_s.strip.empty? }
+  end
+
+  ##
+  # Turns the two auth failures that actually happen into something actionable.
+  # They are easy to confuse and the fixes are completely different.
+  #
+  # @param code [String, Integer] HTTP status returned by X
+  # @return [String] Guidance to print, or an empty string
+  #
+  def credential_hint(code)
+    case code.to_s
+    when '401'
+      '   401 means X rejected the credentials themselves. The four OAuth 1.0a ' \
+      "values must come from one app and be current:\n   " \
+      'X_API_KEY / X_API_KEY_SECRET (app) and X_ACCESS_TOKEN / ' \
+      "X_ACCESS_TOKEN_SECRET (user).\n   " \
+      'Regenerating any of them, or changing the app permissions, ' \
+      'invalidates the old access token — regenerate the token pair after ' \
+      'any permission change.'
+    when '403'
+      '   403 means the credentials are valid but not allowed to post. Check ' \
+      'that the app has Read and Write permissions, that the access token ' \
+      'was regenerated after that was set, and that the app belongs to a Project.'
+    else
+      ''
     end
   end
 
@@ -99,7 +179,10 @@ class Scheduler
     all_tweets = CSV.read(TWEET_COLLECTION_FILE, headers: true)
     published = published_tweets
     category = category_for_current_hour
-    puts "🕒 Current hour: #{Time.now.hour} → Category: #{category || 'unspecified'}"
+    # Report the hour the category was actually derived from. This used to print
+    # Time.now.hour, which on a UTC CI runner showed 15 next to a category
+    # chosen for 21:00 Kathmandu — the two never matched and it read as a bug.
+    puts "🕒 Current time: #{my_timezone.strftime('%H:%M %Z')} → Category: #{category || 'unspecified'}"
 
     tweets_by_category = category ? all_tweets.select { |row| row['category'] == category } : []
     unpublished_tweets = tweets_by_category.reject { |row| published.include?(row['tweet']) }

@@ -10,9 +10,13 @@ module Tweetx
     # Posts a tweet based on the current time and category.
     # Automatically selects an appropriate tweet from the collection.
     #
+    # Exits non-zero when a post was attempted and rejected, so a scheduled job
+    # goes red instead of reporting success on an API failure. Having nothing to
+    # post is not a failure and still exits 0.
+    #
     desc 'tweet', 'Tweet based on current time and category'
     def tweet
-      Scheduler.new.run
+      exit 1 unless Scheduler.new.run
     end
 
     ##
