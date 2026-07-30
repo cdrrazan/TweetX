@@ -172,7 +172,7 @@ class Scheduler
     when 5..8 then 'Motivation'
     when 9..12 then 'Devtip'
     when 13..16 then 'Branding'
-    when 17..20 then 'BuiltWith'
+    when 17..20 then 'Builtwith'
     when 21..23 then 'Ebook'
     end
   end
