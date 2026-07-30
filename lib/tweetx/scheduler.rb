@@ -101,7 +101,7 @@ class Scheduler
     puts "🕒 Current hour: #{Time.now.hour} → Category: #{category || 'unspecified'}"
 
     tweets_by_category = category ? all_tweets.select { |row| row['category'] == category } : []
-    unpublished_tweets = tweets_by_category.reject { |row| published.include?(row['text']) }
+    unpublished_tweets = tweets_by_category.reject { |row| published.include?(row['tweet']) }
 
     if unpublished_tweets.empty?
       puts "⚠️ No unpublished tweets available in category '#{category}'. Skipping tweet."
@@ -120,7 +120,7 @@ class Scheduler
   def published_tweets
     return [] unless File.exist?(TWEET_PUBLISHED_FILE)
 
-    CSV.read(TWEET_PUBLISHED_FILE, headers: true).map { |row| row['text'] }
+    CSV.read(TWEET_PUBLISHED_FILE, headers: true).map { |row| row['tweet'] }
   end
 
   ##
@@ -133,7 +133,7 @@ class Scheduler
   #
   def send_to_published(id, category, text)
     CSV.open(TWEET_PUBLISHED_FILE, 'a+') do |csv|
-      csv << %w[id category text timestamp] if csv.count.zero?
+      csv << %w[id category tweet timestamp] if csv.count.zero?
       timestamp = Time.now.utc.iso8601
 
       csv << [id, category, text, timestamp]
@@ -186,14 +186,14 @@ class Scheduler
   def list_tweets
     all = CSV.read(TWEET_COLLECTION_FILE, headers: true)
     published = published_tweets
-    unpublished = all.reject { |row| published.include?(row['text']) }
+    unpublished = all.reject { |row| published.include?(row['tweet']) }
 
     if unpublished.empty?
       puts '📭 No unpublished tweets found.'
     else
       puts '📋 Unpublished tweets:'
       unpublished.each_with_index do |row, i|
-        puts "#{i + 1}. [#{row['category']}] #{row['text']}"
+        puts "#{i + 1}. [#{row['category']}] #{row['tweet']}"
       end
     end
   end
@@ -208,7 +208,7 @@ class Scheduler
       published = CSV.read(TWEET_PUBLISHED_FILE, headers: true)
       puts '🗃 Published tweets:'
       published.each_with_index do |row, i|
-        puts "#{i + 1}. #{row['text']}"
+        puts "#{i + 1}. #{row['tweet']}"
       end
     else
       puts '📭 No published tweets yet.'
@@ -224,7 +224,7 @@ class Scheduler
   #
   def add_tweet(text, category)
     CSV.open(TWEET_COLLECTION_FILE, 'a+') do |csv|
-      csv << %w[id category text] if csv.count.zero?
+      csv << %w[id category tweet] if csv.count.zero?
       id = SecureRandom.uuid
       csv << [id, category, text]
     end
